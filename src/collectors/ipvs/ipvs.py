@@ -71,9 +71,8 @@ class IPVSCollector(diamond.collector.Collector):
         if self.config['use_sudo']:
             command.insert(0, self.config['sudo_cmd'])
 
-        self.log.debug( "ipvs: before calling subprocess")
         try:
-            p = subprocess.Popen(command, bufsize=-1,
+            p = subprocess.Popen(self.command,
                              stdout=subprocess.PIPE).communicate()[0][:-1]
         except:
             self.log.error("ipvs: unable to subprocess.Popen(%s)" % (command))
