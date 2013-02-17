@@ -3,6 +3,9 @@
 """
 Shells out to get ipvs statistics, which may or may not require sudo access
 
+Config is IPVSCollector.conf, most likely in /etc/diamond/collectors.
+
+
 #### Dependencies
 
  * /usr/sbin/ipvsadmin
@@ -14,6 +17,8 @@ import subprocess
 import os
 import string
 
+import diamond.convertor
+
 
 class IPVSCollector(diamond.collector.Collector):
 
@@ -24,14 +29,14 @@ class IPVSCollector(diamond.collector.Collector):
         self.command = [self.config['bin'], '--list', '--stats', '--numeric',
                         '--exact']
 
-        if self.config['use_sudo']:
-            self.command.insert(0, self.config['sudo_cmd'])
+        #if self.config['use_sudo']:
+        #    self.command.insert(0, self.config['sudo_cmd'])
 
         p = subprocess.Popen(self.command, stdout=subprocess.PIPE)
         p.wait()
 
         if p.returncode == 255:
-            self.command = filter(lambda a: a != '--exact', x)
+            self.command = filter(lambda a: a != '--exact', self.command)
 
     def get_default_config_help(self):
         config_help = super(IPVSCollector, self).get_default_config_help()
@@ -48,8 +53,8 @@ class IPVSCollector(diamond.collector.Collector):
         """
         config = super(IPVSCollector, self).get_default_config()
         config.update({
-            'bin':              '/usr/sbin/ipvsadm',
-            'use_sudo':         True,
+            'bin':              '/sbin/ipvsadm',
+            'use_sudo':         False,
             'sudo_cmd':         '/usr/bin/sudo',
             'path':             'ipvs'
         })
@@ -78,7 +83,9 @@ class IPVSCollector(diamond.collector.Collector):
 
         external = ""
         backend = ""
+        self.log.debug( "ipvs: p=%s" % (p))
         for i, line in enumerate(p.split("\n")):
+            self.log.debug( "ipvs: line=%s" % (line))
             if i < 3:
                 continue
             row = line.split()
@@ -93,7 +100,6 @@ class IPVSCollector(diamond.collector.Collector):
 
             for metric, column in columns.iteritems():
                 metric_name = ".".join([external, backend, metric])
-                # metric_value = int(row[column])
                 value = row[column]
                 if (value.endswith('K')):
                         metric_value = int(value[0:len(value) - 1]) * 1024
