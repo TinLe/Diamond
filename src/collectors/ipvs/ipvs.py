@@ -17,8 +17,7 @@ import subprocess
 import os
 import string
 
-import diamond.convertor
-
+from diamond.collector import str_to_bool
 
 class IPVSCollector(diamond.collector.Collector):
 
@@ -29,8 +28,8 @@ class IPVSCollector(diamond.collector.Collector):
         self.command = [self.config['bin'], '--list', '--stats', '--numeric',
                         '--exact']
 
-        #if self.config['use_sudo']:
-        #    self.command.insert(0, self.config['sudo_cmd'])
+        if str_to_bool(self.config['use_sudo']):
+            self.command.insert(0, self.config['sudo_cmd'])
 
         p = subprocess.Popen(self.command, stdout=subprocess.PIPE)
         p.wait()
