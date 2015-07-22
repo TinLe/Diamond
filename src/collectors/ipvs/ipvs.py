@@ -3,8 +3,6 @@
 """
 Shells out to get ipvs statistics, which may or may not require sudo access
 
-Config is IPVSCollector.conf, most likely in /etc/diamond/collectors.
-
 #### Dependencies
 
  * /usr/sbin/ipvsadmin
@@ -15,7 +13,6 @@ import diamond.collector
 import subprocess
 import os
 import string
-
 from diamond.collector import str_to_bool
 
 
@@ -51,8 +48,8 @@ class IPVSCollector(diamond.collector.Collector):
         """
         config = super(IPVSCollector, self).get_default_config()
         config.update({
-            'bin':              '/sbin/ipvsadm',
-            'use_sudo':         False,
+            'bin':              '/usr/sbin/ipvsadm',
+            'use_sudo':         True,
             'sudo_cmd':         '/usr/bin/sudo',
             'path':             'ipvs'
         })
@@ -81,8 +78,6 @@ class IPVSCollector(diamond.collector.Collector):
         p = subprocess.Popen(self.statcommand,
                              stdout=subprocess.PIPE).communicate()[0][:-1]
 
-        p = subprocess.Popen(self.command,
-                           stdout=subprocess.PIPE).communicate()[0][:-1]
         columns = {
             'conns': 2,
             'inpkts': 3,
@@ -93,9 +88,7 @@ class IPVSCollector(diamond.collector.Collector):
 
         external = ""
         backend = ""
-        self.log.debug( "ipvs: p=%s" % (p))
         for i, line in enumerate(p.split("\n")):
-            self.log.debug( "ipvs: line=%s" % (line))
             if i < 3:
                 continue
             row = line.split()
@@ -110,6 +103,7 @@ class IPVSCollector(diamond.collector.Collector):
 
             for metric, column in columns.iteritems():
                 metric_name = ".".join([external, backend, metric])
+                # metric_value = int(row[column])
                 value = row[column]
                 if (value.endswith('K')):
                         metric_value = int(value[0:len(value) - 1]) * 1024
