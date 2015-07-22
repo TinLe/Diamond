@@ -21,7 +21,6 @@ from __future__ import division
 try:
     import MySQLdb
     from MySQLdb import MySQLError
-    MySQLdb  # workaround for pyflakes issue #13
 except ImportError:
     MySQLdb = None
 import diamond
@@ -31,8 +30,8 @@ import re
 
 class MySQLPerfCollector(diamond.collector.Collector):
 
-    def __init__(self, *args, **kwargs):
-        super(MySQLPerfCollector, self).__init__(*args, **kwargs)
+    def process_config(self):
+        super(MySQLPerfCollector, self).process_config()
         self.db = None
         self.last_wait_count = {}
         self.last_wait_sum = {}
@@ -138,7 +137,7 @@ class MySQLPerfCollector(diamond.collector.Collector):
             self.log.error('MySQLPerfCollector couldnt connect to database %s',
                            e)
             return {}
-        self.log.info('MySQLPerfCollector: Connected to database.')
+        self.log.debug('MySQLPerfCollector: Connected to database.')
 
     def query_list(self, query, params):
         cursor = self.db.cursor()
@@ -220,7 +219,7 @@ class MySQLPerfCollector(diamond.collector.Collector):
     def collect(self):
         for host in self.config['hosts']:
             matches = re.search(
-                '^([^:]*):([^@]*)@([^:]*):([^/]*)/([^/]*)/?(.*)$', host)
+                '^([^:]*):([^@]*)@([^:]*):?([^/]*)/([^/]*)/?(.*)$', host)
 
             if not matches:
                 continue
@@ -228,7 +227,10 @@ class MySQLPerfCollector(diamond.collector.Collector):
             params = {}
 
             params['host'] = matches.group(3)
-            params['port'] = int(matches.group(4))
+            try:
+                params['port'] = int(matches.group(4))
+            except ValueError:
+                params['port'] = 3306
             params['db'] = matches.group(5)
             params['user'] = matches.group(1)
             params['passwd'] = matches.group(2)

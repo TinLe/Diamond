@@ -14,7 +14,6 @@ http://ceph.com/docs/master/dev/perf_counters/
 
 try:
     import json
-    json  # workaround for pyflakes issue #13
 except ImportError:
     import simplejson as json
 
@@ -133,7 +132,7 @@ class CephCollector(diamond.collector.Collector):
             stats,
             prefix=counter_prefix,
         ):
-            self.publish(stat_name, stat_value)
+            self.publish_gauge(stat_name, stat_value)
 
     def collect(self):
         """

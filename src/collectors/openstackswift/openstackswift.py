@@ -19,7 +19,6 @@ from subprocess import Popen, PIPE
 
 try:
     import json
-    json  # workaround for pyflakes issue #13
 except ImportError:
     import simplejson as json
 
@@ -61,8 +60,10 @@ class OpenstackSwiftCollector(diamond.collector.Collector):
     def collect(self):
         # dispersion report.  this can take easily >60s. beware!
         if (self.config['enable_dispersion_report']):
-            p = Popen(['swift-dispersion-report', '-j'],
-                stdout=PIPE, stderr=PIPE)
+            p = Popen(
+                ['swift-dispersion-report', '-j'],
+                stdout=PIPE,
+                stderr=PIPE)
             stdout, stderr = p.communicate()
             self.publish('dispersion.errors', len(stderr.split('\n')) - 1)
             data = json.loads(stdout)

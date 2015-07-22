@@ -3,6 +3,10 @@
 """
 This class collects data on memory utilization
 
+Note that MemFree may report no memory free. This may not actually be the case,
+as memory is allocated to Buffers and Cache as well. See
+[this link](http://www.linuxatemyram.com/) for more details.
+
 #### Dependencies
 
 * /proc/meminfo or psutil
@@ -15,7 +19,6 @@ import os
 
 try:
     import psutil
-    psutil  # workaround for pyflakes issue #13
 except ImportError:
     psutil = None
 
@@ -27,12 +30,14 @@ _KEY_MAPPING = [
     'Active',
     'Dirty',
     'Inactive',
+    'Shmem',
     'SwapTotal',
     'SwapFree',
     'SwapCached',
     'VmallocTotal',
     'VmallocUsed',
-    'VmallocChunk'
+    'VmallocChunk',
+    'Committed_AS',
 ]
 
 
@@ -53,9 +58,7 @@ class MemoryCollector(diamond.collector.Collector):
         """
         config = super(MemoryCollector, self).get_default_config()
         config.update({
-            'enabled':  'True',
             'path':     'memory',
-            'method':   'Threaded',
             # Collect all the nodes or just a few standard ones?
             # Uncomment to enable
             #'detailed': 'True'
@@ -93,10 +96,15 @@ class MemoryCollector(diamond.collector.Collector):
                 except ValueError:
                     continue
             return True
-        elif psutil:
+        else:
+            if not psutil:
+                self.log.error('Unable to import psutil')
+                self.log.error('No memory metrics retrieved')
+                return None
+
             phymem_usage = psutil.phymem_usage()
             virtmem_usage = psutil.virtmem_usage()
-            units = 'b'
+            units = 'B'
 
             for unit in self.config['byte_unit']:
                 value = diamond.convertor.binary.convert(

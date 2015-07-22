@@ -19,15 +19,21 @@ import diamond.collector
 
 class HttpdCollector(diamond.collector.Collector):
 
-    def __init__(self, *args, **kwargs):
-        super(HttpdCollector, self).__init__(*args, **kwargs)
+    def process_config(self):
+        super(HttpdCollector, self).process_config()
         if 'url' in self.config:
             self.config['urls'].append(self.config['url'])
 
         self.urls = {}
+        if isinstance(self.config['urls'], basestring):
+            self.config['urls'] = self.config['urls'].split(',')
+
         for url in self.config['urls']:
+            # Handle the case where there is a trailing comman on the urls list
+            if len(url) == 0:
+                continue
             if ' ' in url:
-                parts = url.split()
+                parts = url.split(' ')
                 self.urls[parts[0]] = parts[1]
             else:
                 self.urls[''] = url
@@ -56,9 +62,6 @@ class HttpdCollector(diamond.collector.Collector):
         for nickname in self.urls.keys():
             url = self.urls[nickname]
 
-            metrics = ['ReqPerSec', 'BytesPerSec', 'BytesPerReq',
-                       'BusyWorkers', 'IdleWorkers', 'Total Accesses']
-
             try:
                 while True:
 
@@ -85,7 +88,7 @@ class HttpdCollector(diamond.collector.Collector):
                     data = response.read()
                     headers = dict(response.getheaders())
                     if ('location' not in headers
-                        or headers['location'] == url):
+                            or headers['location'] == url):
                         connection.close()
                         break
                     url = headers['location']
@@ -103,16 +106,64 @@ class HttpdCollector(diamond.collector.Collector):
                     if m:
                         k = m.group(1)
                         v = m.group(2)
-                        if k in metrics:
-                            # Get Metric Name
-                            metric_name = "%s" % re.sub('\s+', '', k)
 
-                            # Prefix with the nickname?
-                            if len(nickname) > 0:
-                                metric_name = nickname + '.' + metric_name
+                        # IdleWorkers gets determined from the scoreboard
+                        if k == 'IdleWorkers':
+                            continue
 
-                            # Get Metric Value
-                            metric_value = "%d" % float(v)
+                        if k == 'Scoreboard':
+                            for sb_kv in self._parseScoreboard(v):
+                                self._publish(nickname, sb_kv[0], sb_kv[1])
+                        else:
+                            self._publish(nickname, k, v)
 
-                            # Publish Metric
-                            self.publish(metric_name, metric_value)
+    def _publish(self, nickname, key, value):
+
+        metrics = ['ReqPerSec', 'BytesPerSec', 'BytesPerReq', 'BusyWorkers',
+                   'Total Accesses', 'IdleWorkers', 'StartingWorkers',
+                   'ReadingWorkers', 'WritingWorkers', 'KeepaliveWorkers',
+                   'DnsWorkers', 'ClosingWorkers', 'LoggingWorkers',
+                   'FinishingWorkers', 'CleanupWorkers']
+
+        metrics_precision = ['ReqPerSec', 'BytesPerSec', 'BytesPerReq']
+
+        if key in metrics:
+            # Get Metric Name
+            presicion_metric = False
+            metric_name = "%s" % re.sub('\s+', '', key)
+            if metric_name in metrics_precision:
+                presicion_metric = 1
+
+            # Prefix with the nickname?
+            if len(nickname) > 0:
+                metric_name = nickname + '.' + metric_name
+
+            # Use precision for ReqPerSec BytesPerSec BytesPerReq
+            if presicion_metric:
+                # Get Metric Value
+                metric_value = "%f" % float(value)
+
+                # Publish Metric
+                self.publish(metric_name, metric_value, precision=5)
+            else:
+                # Get Metric Value
+                metric_value = "%d" % float(value)
+
+                # Publish Metric
+                self.publish(metric_name, metric_value)
+
+    def _parseScoreboard(self, sb):
+
+        ret = []
+
+        ret.append(('IdleWorkers', sb.count('_')))
+        ret.append(('ReadingWorkers', sb.count('R')))
+        ret.append(('WritingWorkers', sb.count('W')))
+        ret.append(('KeepaliveWorkers', sb.count('K')))
+        ret.append(('DnsWorkers', sb.count('D')))
+        ret.append(('ClosingWorkers', sb.count('C')))
+        ret.append(('LoggingWorkers', sb.count('L')))
+        ret.append(('FinishingWorkers', sb.count('G')))
+        ret.append(('CleanupWorkers', sb.count('I')))
+
+        return ret

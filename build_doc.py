@@ -7,6 +7,7 @@ import sys
 import optparse
 import configobj
 import traceback
+import tempfile
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 
@@ -15,12 +16,10 @@ def getIncludePaths(path):
     for f in os.listdir(path):
         cPath = os.path.abspath(os.path.join(path, f))
 
-        if os.path.isfile(cPath) and len(f) > 3 and f[-3:] == '.py':
+        if os.path.isfile(cPath) and len(f) > 3 and f.endswith('.py'):
             sys.path.append(os.path.dirname(cPath))
 
-    for f in os.listdir(path):
-        cPath = os.path.abspath(os.path.join(path, f))
-        if os.path.isdir(cPath):
+        elif os.path.isdir(cPath):
             getIncludePaths(cPath)
 
 collectors = {}
@@ -30,8 +29,13 @@ def getCollectors(path):
     for f in os.listdir(path):
         cPath = os.path.abspath(os.path.join(path, f))
 
-        if os.path.isfile(cPath) and len(f) > 3 and f[-3:] == '.py':
+        if os.path.isfile(cPath) and len(f) > 3 and f.endswith('.py'):
             modname = f[:-3]
+
+            if modname.startswith('Test'):
+                continue
+            if modname.startswith('test'):
+                continue
 
             try:
                 # Import the module
@@ -50,11 +54,8 @@ def getCollectors(path):
                 print "Failed to import module: %s. %s" % (
                     modname, traceback.format_exc())
                 collectors[modname] = False
-                continue
 
-    for f in os.listdir(path):
-        cPath = os.path.abspath(os.path.join(path, f))
-        if os.path.isdir(cPath):
+        elif os.path.isdir(cPath):
             getCollectors(cPath)
 
 handlers = {}
@@ -64,7 +65,7 @@ def getHandlers(path):
     for f in os.listdir(path):
         cPath = os.path.abspath(os.path.join(path, f))
 
-        if os.path.isfile(cPath) and len(f) > 3 and f[-3:] == '.py':
+        if os.path.isfile(cPath) and len(f) > 3 and f.endswith('.py'):
             modname = f[:-3]
 
             try:
@@ -85,11 +86,8 @@ def getHandlers(path):
                 print "Failed to import module: %s. %s" % (
                     modname, traceback.format_exc())
                 handlers[modname] = False
-                continue
 
-    for f in os.listdir(path):
-        cPath = os.path.abspath(os.path.join(path, f))
-        if os.path.isdir(cPath):
+        elif os.path.isdir(cPath):
             getHandlers(cPath)
 
 ################################################################################
@@ -118,7 +116,6 @@ if __name__ == "__main__":
     # Initialize Config
     if os.path.exists(options.configfile):
         config = configobj.ConfigObj(os.path.abspath(options.configfile))
-        config['configfile'] = options.configfile
     else:
         print >> sys.stderr, "ERROR: Config file: %s does not exist." % (
             options.configfile)
@@ -140,9 +137,6 @@ if __name__ == "__main__":
 
     collectorIndexFile = open(os.path.join(docs_path, "Collectors.md"), 'w')
     collectorIndexFile.write("## Collectors\n")
-    collectorIndexFile.write("\n")
-    collectorIndexFile.write("Note that the default collectors are noted via "
-                             + "the super-script symbol <sup>♦</sup>.\n")
     collectorIndexFile.write("\n")
 
     for collector in sorted(collectors.iterkeys()):
@@ -170,8 +164,6 @@ if __name__ == "__main__":
                                     "collectors-" + collector + ".md"), 'w')
 
         enabled = ''
-        if defaultOptions['enabled']:
-            enabled = ' <sup>♦</sup>'
 
         collectorIndexFile.write(" - [%s](collectors-%s)%s\n" % (collector,
                                                                  collector,
@@ -179,7 +171,9 @@ if __name__ == "__main__":
 
         docFile.write("%s\n" % (collector))
         docFile.write("=====\n")
-        docFile.write("%s" % (collectors[collector].__doc__))
+        if collectors[collector].__doc__ is None:
+            print "No __doc__ string!"
+        docFile.write("%s\n" % (collectors[collector].__doc__))
         docFile.write("#### Options - [Generic Options](Configuration)\n")
         docFile.write("\n")
 
@@ -220,6 +214,9 @@ if __name__ == "__main__":
         docFile.write("__EXAMPLESHERE__\n")
         docFile.write("```\n")
         docFile.write("\n")
+        docFile.write("### This file was generated from the python source\n")
+        docFile.write("### Please edit the source to make changes\n")
+        docFile.write("\n")
 
         docFile.close()
 
@@ -238,10 +235,32 @@ if __name__ == "__main__":
         if handler == "Handler":
             continue
 
+        if handler[0:4] == "Test":
+            continue
+
         print "Processing %s..." % (handler)
 
         if not hasattr(handlers[handler], handler):
             continue
+
+        cls = getattr(handlers[handler], handler)
+
+        tmpfile = tempfile.mkstemp()
+
+        options = None
+        defaultOptions = None
+
+        try:
+            obj = cls({
+                'log_file': tmpfile[1],
+                })
+
+            options = obj.get_default_config_help()
+            defaultOptions = obj.get_default_config()
+        except Exception, e:
+            print "Caught Exception %s" % e
+
+        os.remove(tmpfile[1])
 
         docFile = open(os.path.join(docs_path,
                                     "handler-" + handler + ".md"), 'w')
@@ -251,6 +270,47 @@ if __name__ == "__main__":
         docFile.write("%s\n" % (handler))
         docFile.write("====\n")
         docFile.write("%s" % (handlers[handler].__doc__))
+
+        docFile.write("#### Options - [Generic Options](Configuration)\n")
+        docFile.write("\n")
+
+        docFile.write("<table>")
+
+        docFile.write("<tr>")
+        docFile.write("<th>Setting</th>")
+        docFile.write("<th>Default</th>")
+        docFile.write("<th>Description</th>")
+        docFile.write("<th>Type</th>")
+        docFile.write("</tr>\n")
+
+        if options:
+            for option in sorted(options.keys()):
+                defaultOption = ''
+                defaultOptionType = ''
+                if option in defaultOptions:
+                    defaultOptionType = defaultOptions[
+                        option].__class__.__name__
+                    if isinstance(defaultOptions[option], list):
+                        defaultOption = ', '.join(map(str,
+                                                      defaultOptions[option]))
+                        defaultOption += ','
+                    else:
+                        defaultOption = str(defaultOptions[option])
+
+                docFile.write("<tr>")
+                docFile.write("<td>%s</td>" % (option))
+                docFile.write("<td>%s</td>" % (defaultOption))
+                docFile.write("<td>%s</td>" % (options[option].replace(
+                    "\n", '<br>\n')))
+                docFile.write("<td>%s</td>" % (defaultOptionType))
+                docFile.write("</tr>\n")
+
+        docFile.write("</table>\n")
+
+        docFile.write("\n")
+        docFile.write("### This file was generated from the python source\n")
+        docFile.write("### Please edit the source to make changes\n")
+        docFile.write("\n")
 
         docFile.close()
 

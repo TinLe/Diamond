@@ -1,9 +1,18 @@
-#!/bin/bash
-DESC=($(git describe --match 'v*' | sed "s/v\([0-9\.]*\)-*\([0-9]*\)-*\([0-9a-z]*\)/\1 \2 \3/"))
-VERSION=($(echo ${DESC[0]} | tr "." " "))
-COMMIT=${DESC[1]}
-VERSION_MAJ=${VERSION[0]}
-VERSION_MIN=${VERSION[1]}
+#!/bin/sh
+
+DESC=`git describe --match 'v*' 2>/dev/null | sed "s/v\([0-9\.]*\)-*\([0-9]*\)-*\([0-9a-z]*\)/\1 \2 \3/"`
+
+if [ -z "${DESC}" ]
+then
+    # Try to support using the tagged downloads
+    DESC=`pwd | grep -oe 'Diamond-.\+' | sed 's/Diamond-//g'`
+    LOCAL_REV="-github_archive"
+fi
+
+VERSION=`echo ${DESC} | awk '{ print $1 }' | tr "." " "`
+COMMIT=`echo ${DESC} | awk '{ print $2 }'`
+VERSION_MAJ=`echo ${VERSION} | awk '{ print $1 }'`
+VERSION_MIN=`echo ${VERSION} | awk '{ print $2 }'`
 VERSION_REV=${COMMIT}
 if [ -z "${VERSION_REV}" ]; then
     VERSION_REV="0"

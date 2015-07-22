@@ -21,7 +21,6 @@ def run_only_if_kitchen_is_available(func):
     if sys.version_info < (2, 7):
         try:
             from kitchen.pycompat27 import subprocess
-            subprocess  # workaround for pyflakes issue #13
         except ImportError:
             subprocess = None
     else:
@@ -56,6 +55,14 @@ class TestUserScriptsCollector(CollectorTestCase):
         self.setDocExample(collector=self.collector.__class__.__name__,
                            metrics=metrics)
         self.assertPublishedMany(publish_mock, metrics)
+
+    @run_only_if_kitchen_is_available
+    @patch.object(Collector, 'publish')
+    def test_should_skip_over_unrunnable_files(self, publish_mock):
+        self.collector.collect()
+        # Just make sure publish got called >0 times, if this test fails it'll
+        # be due to raising an exception. Meh.
+        assert publish_mock.call_args_list
 
 ################################################################################
 if __name__ == "__main__":

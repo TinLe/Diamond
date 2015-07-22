@@ -21,7 +21,6 @@ import diamond.collector
 
 try:
     import sensors
-    sensors  # workaround for pyflakes issue #13
 except ImportError:
     sensors = None
 
@@ -55,7 +54,8 @@ class LMSensorsCollector(diamond.collector.Collector):
         try:
             for chip in sensors.iter_detected_chips():
                 for feature in chip:
-                    self.publish(".".join([str(chip), feature.label]),
+                    self.publish(".".join([str(chip),
+                                           feature.label.replace(' ', '-')]),
                                  feature.get_value())
         finally:
             sensors.cleanup()

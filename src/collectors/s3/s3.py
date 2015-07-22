@@ -31,7 +31,6 @@ class S3BucketCollector(diamond.collector.Collector):
         """
         config = super(S3BucketCollector, self).get_default_config()
         config.update({
-            'enabled':   'False',
             'path':      'aws.s3',
             'byte_unit': 'byte'
         })
@@ -71,5 +70,5 @@ class S3BucketCollector(diamond.collector.Collector):
                         oldUnit='byte',
                         newUnit=byte_unit
                     )
-                    self.publish("%s.size.%s" % (bucket_name, byte_unit,
-                                                 new_size))
+                    self.publish("%s.size.%s" % (bucket_name, byte_unit),
+                                 new_size)

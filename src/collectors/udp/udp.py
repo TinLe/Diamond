@@ -19,8 +19,8 @@ class UDPCollector(diamond.collector.Collector):
         '/proc/net/snmp'
     ]
 
-    def __init__(self, config, handlers):
-        super(UDPCollector, self).__init__(config, handlers)
+    def process_config(self):
+        super(UDPCollector, self).process_config()
         if self.config['allowed_names'] is None:
             self.config['allowed_names'] = []
 
@@ -88,7 +88,7 @@ class UDPCollector(diamond.collector.Collector):
 
         for metric_name in metrics.keys():
             if (len(self.config['allowed_names']) > 0
-                and metric_name not in self.config['allowed_names']):
+                    and metric_name not in self.config['allowed_names']):
                 continue
 
             value = metrics[metric_name]

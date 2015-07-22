@@ -58,7 +58,6 @@ class OpenVPNCollector(diamond.collector.Collector):
         config = super(OpenVPNCollector, self).get_default_config()
         config.update({
             'path':      'openvpn',
-            'method':    'Threaded',
             'instances': 'file:///var/log/openvpn/status.log',
             'timeout':   '10',
         })
@@ -176,6 +175,7 @@ class OpenVPNCollector(diamond.collector.Collector):
 
         time.sleep(0.5)
 
+        number_connected_clients = 0
         section = ''
         heading = []
         for line in lines:
@@ -208,6 +208,7 @@ class OpenVPNCollector(diamond.collector.Collector):
                         heading = line.strip().split(',')
                     else:
                         info = {}
+                        number_connected_clients += 1
                         for k, v in zip(heading, line.strip().split(',')):
                             info[k.lower()] = v
 
@@ -231,6 +232,7 @@ class OpenVPNCollector(diamond.collector.Collector):
 
             elif line.startswith('END'):
                 break
+        self.publish('%s.clients.connected' % name, number_connected_clients)
 
     def publish_number(self, key, value):
         key = key.replace('/', '-').replace(' ', '_').lower()

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 ###############################################################################
 
 import os
@@ -12,19 +13,16 @@ import configobj
 
 try:
     import cPickle as pickle
-    pickle  # workaround for pyflakes issue #13
 except ImportError:
     import pickle as pickle
 
 try:
     from cStringIO import StringIO
-    StringIO  # workaround for pyflakes issue #13
 except ImportError:
     from StringIO import StringIO
 
 try:
     from setproctitle import setproctitle
-    setproctitle  # workaround for pyflakes issue #13
 except ImportError:
     setproctitle = None
 
@@ -61,7 +59,8 @@ class CollectorTestCase(unittest.TestCase):
         if not len(metrics):
             return False
 
-        filePath = os.path.join('docs', 'collectors-' + collector + '.md')
+        filePath = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                'docs', 'collectors-' + collector + '.md')
 
         if not os.path.exists(filePath):
             return False
@@ -99,13 +98,18 @@ class CollectorTestCase(unittest.TestCase):
             return False
         return True
 
+    def getFixtureDirPath(self):
+        path = os.path.join(
+            os.path.dirname(inspect.getfile(self.__class__)),
+            'fixtures')
+        return path
+
     def getFixturePath(self, fixture_name):
-        file = os.path.join(os.path.dirname(inspect.getfile(self.__class__)),
-                            'fixtures',
+        path = os.path.join(self.getFixtureDirPath(),
                             fixture_name)
-        if not os.access(file, os.R_OK):
-            print "Missing Fixture " + file
-        return file
+        if not os.access(path, os.R_OK):
+            print "Missing Fixture " + path
+        return path
 
     def getFixture(self, fixture_name):
         try:
@@ -114,6 +118,12 @@ class CollectorTestCase(unittest.TestCase):
             return data
         finally:
             f.close()
+
+    def getFixtures(self):
+        fixtures = []
+        for root, dirnames, filenames in os.walk(self.getFixtureDirPath()):
+            fixtures.append(os.path.join(root, dirnames, filenames))
+        return fixtures
 
     def getPickledResults(self, results_name):
         try:
@@ -139,31 +149,30 @@ class CollectorTestCase(unittest.TestCase):
             calls = filter(lambda x: x[0][0] == key, mock.call_args_list)
 
         actual_value = len(calls)
-        expected_value = 1
         message = '%s: actual number of calls %d, expected %d' % (
             key, actual_value, expected_value)
 
         self.assertEqual(actual_value, expected_value, message)
 
-        actual_value = calls[0][0][1]
-        expected_value = value
-        precision = 0
+        if expected_value:
+            actual_value = calls[0][0][1]
+            expected_value = value
+            precision = 0
 
-        if isinstance(value, tuple):
-            expected_value, precision = expected_value
+            if isinstance(value, tuple):
+                expected_value, precision = expected_value
 
-        message = '%s: actual %r, expected %r' % (key,
-                                                  actual_value,
-                                                  expected_value)
-        #print message
+            message = '%s: actual %r, expected %r' % (key,
+                                                      actual_value,
+                                                      expected_value)
 
-        if precision is not None:
-            self.assertAlmostEqual(float(actual_value),
-                                   float(expected_value),
-                                   places=precision,
-                                   msg=message)
-        else:
-            self.assertEqual(actual_value, expected_value, message)
+            if precision is not None:
+                self.assertAlmostEqual(float(actual_value),
+                                       float(expected_value),
+                                       places=precision,
+                                       msg=message)
+            else:
+                self.assertEqual(actual_value, expected_value, message)
 
     def assertUnpublishedMany(self, mock, dict, expected_value=0):
         return self.assertPublishedMany(mock, dict, expected_value)
@@ -201,7 +210,6 @@ class CollectorTestCase(unittest.TestCase):
         message = '%s: actual %r, expected %r' % (key,
                                                   actual_value,
                                                   expected_value)
-        #print message
 
         if precision is not None:
             self.assertAlmostEqual(float(actual_value),
@@ -240,7 +248,6 @@ def getCollectorTests(path):
                                                      globals(),
                                                      locals(),
                                                      ['*'])
-                #print "Imported module: %s" % (modname)
             except Exception:
                 print "Failed to import module: %s. %s" % (
                     modname, traceback.format_exc())

@@ -3,6 +3,7 @@
 ################################################################################
 
 import os
+import time
 from test import CollectorTestCase
 from test import get_collector_config
 from test import unittest
@@ -18,11 +19,9 @@ from processresources import ProcessResourcesCollector
 def run_only_if_psutil_is_available(func):
     try:
         import psutil
-        psutil  # workaround for pyflakes issue #13
     except ImportError:
         psutil = None
-    pred = lambda: psutil is not None
-    return run_only(func, pred)
+    return run_only(func, lambda: psutil is not None)
 
 
 class TestProcessResourcesCollector(CollectorTestCase):
@@ -34,7 +33,7 @@ class TestProcessResourcesCollector(CollectorTestCase):
                 'name': ['postgres', 'pg'],
             },
             'foo': {
-                'exe': '^foobar',
+                'exe': '^\/usr\/bin\/foo',
             },
             'bar': {
                 'name': '^bar',
@@ -59,68 +58,82 @@ class TestProcessResourcesCollector(CollectorTestCase):
         self.assertTrue(ProcessResourcesCollector)
 
     @run_only_if_psutil_is_available
+    @patch.object(time, 'time')
     @patch.object(os, 'getpid')
     @patch.object(Collector, 'publish')
-    def test(self, publish_mock, getpid_mock):
+    def test(self, publish_mock, getpid_mock, time_mock):
         process_info_list = [
             # postgres processes
-            {'exe': '/usr/lib/postgresql/9.1/bin/postgres',
-             'name': 'postgres',
-             'pid': 1427,
-             'rss': 9875456,
-             'vms': 106852352},
-            {'exe': '',
-             'name': 'postgres: writer process   ',
-             'pid': 1445,
-             'rss': 1753088,
-             'vms': 106835968},
-            {'exe': '',
-             'name': 'postgres: wal writer process   ',
-             'pid': 1446,
-             'rss': 1503232,
-             'vms': 106835968},
-            {'exe': '',
-             'name': 'postgres: autovacuum launcher process   ',
-             'pid': 1447,
-             'rss': 3989504,
-             'vms': 109023232},
-            {'exe': '',
-             'name': 'postgres: stats collector process   ',
-             'pid': 1448,
-             'rss': 2400256,
-             'vms': 75829248},
+            {
+                'exe': '/usr/lib/postgresql/9.1/bin/postgres',
+                'name': 'postgres',
+                'pid': 1427,
+                'rss': 1000000,
+                'vms': 1000000
+            },
+            {
+                'exe': '',
+                'name': 'postgres: writer process   ',
+                'pid': 1445,
+                'rss': 100000,
+                'vms': 200000
+            },
+            {
+                'exe': '',
+                'name': 'postgres: wal writer process   ',
+                'pid': 1446,
+                'rss': 10000,
+                'vms': 20000
+            },
+            {
+                'exe': '',
+                'name': 'postgres: autovacuum launcher process   ',
+                'pid': 1447,
+                'rss': 1000,
+                'vms': 2000
+            },
+            {
+                'exe': '',
+                'name': 'postgres: stats collector process   ',
+                'pid': 1448,
+                'rss': 100,
+                'vms': 200},
             # postgres-y process
-            {'exe': '',
-             'name': 'posgre: not really',
-             'pid': 9999,
-             'rss': 999999999999,
-             'vms': 999999999999,
+            {
+                'exe': '',
+                'name': 'posgre: not really',
+                'pid': 9999,
+                'rss': 10,
+                'vms': 20,
             },
-            # bar process
-            {'exe': '/usr/bin/foo',
-             'name': 'bar',
-             'pid': 9998,
-             'rss': 1,
-             'vms': 1
+            {
+                'exe': '/usr/bin/foo',
+                'name': 'bar',
+                'pid': 9998,
+                'rss': 1,
+                'vms': 1
             },
-            {'exe': '',
-             'name': 'barein',
-             'pid': 9997,
-             'rss': 1,
-             'vms': 1
+            {
+                'exe': '',
+                'name': 'barein',
+                'pid': 9997,
+                'rss': 2,
+                'vms': 2
             },
-            {'exe': '/usr/bin/bar',
-             'name': '',
-             'pid': 9996,
-             'rss': 10,
-             'vms': 10,
+            {
+                'exe': '/usr/bin/bar',
+                'name': '',
+                'pid': 9996,
+                'rss': 3,
+                'vms': 3,
             },
             # diamond self mon process
-            {'exe': 'DUMMY',
-             'name': 'DUMMY',
-             'pid': self.SELFMON_PID,
-             'rss': 1234,
-             'vms': 90210,
+            {
+                'exe': 'DUMMY',
+                'name': 'DUMMY',
+                'pid': self.SELFMON_PID,
+                'rss': 1234,
+                'vms': 4,
             },
         ]
 
@@ -133,15 +146,55 @@ class TestProcessResourcesCollector(CollectorTestCase):
                 if exe is not None:
                     self.exe = exe
 
-            def get_memory_info(self):
-                class MemInfo:
-                    def __init__(self, rss, vms):
-                        self.rss = rss
-                        self.vms = vms
-                return MemInfo(self.rss, self.vms)
+                self.cmdline = [self.exe]
+                self.create_time = 0
 
-            def get_cpu_percent(self, interval=0.1):
-                return 7
+            def as_dict(self):
+                from collections import namedtuple
+                meminfo = namedtuple('meminfo', 'rss vms')
+                ext_meminfo = namedtuple('meminfo',
+                                         'rss vms shared text lib data dirty')
+                cputimes = namedtuple('cputimes', 'user system')
+                thread = namedtuple('thread', 'id user_time system_time')
+                user = namedtuple('user', 'real effective saved')
+                group = namedtuple('group', 'real effective saved')
+                ionice = namedtuple('ionice', 'ioclass value')
+                amount = namedtuple('amount', 'voluntary involuntary')
+                return {
+                    'status': 'sleeping',
+                    'num_ctx_switches': amount(voluntary=2243, involuntary=221),
+                    'pid': self.pid,
+                    'connections': None,
+                    'cmdline': [self.exe],
+                    'create_time': 0,
+                    'ionice': ionice(ioclass=0, value=0),
+                    'num_fds': 10,
+                    'memory_maps': None,
+                    'cpu_percent': 0.0,
+                    'terminal': None,
+                    'ppid': 0,
+                    'cwd': None,
+                    'nice': 0,
+                    'username': 'root',
+                    'cpu_times': cputimes(user=0.27, system=1.05),
+                    'io_counters': None,
+                    'ext_memory_info': ext_meminfo(rss=self.rss,
+                                                   vms=self.vms,
+                                                   shared=1310720,
+                                                   text=188416,
+                                                   lib=0,
+                                                   data=868352,
+                                                   dirty=0),
+                    'threads': [thread(id=1, user_time=0.27, system_time=1.04)],
+                    'open_files': None,
+                    'name': self.name,
+                    'num_threads': 1,
+                    'exe': self.exe,
+                    'uids': user(real=0, effective=0, saved=0),
+                    'gids': group(real=0, effective=0, saved=0),
+                    'cpu_affinity': [0, 1, 2, 3],
+                    'memory_percent': 0.03254831000922748,
+                    'memory_info': meminfo(rss=self.rss, vms=self.vms)}
 
         process_iter_mock = (ProcessMock(
             pid=x['pid'],
@@ -151,6 +204,8 @@ class TestProcessResourcesCollector(CollectorTestCase):
             exe=x['exe'])
             for x in process_info_list)
 
+        time_mock.return_value = 1234567890
+
         getpid_mock.return_value = self.SELFMON_PID
 
         patch_psutil_process_iter = patch('psutil.process_iter',
@@ -158,19 +213,15 @@ class TestProcessResourcesCollector(CollectorTestCase):
         patch_psutil_process_iter.start()
         self.collector.collect()
         patch_psutil_process_iter.stop()
-
-        self.assertPublished(publish_mock, 'postgres.rss',
-                             9875456 + 1753088 + 1503232 + 3989504 + 2400256)
-        self.assertPublished(publish_mock, 'postgres.vms',
-                             106852352 + 106835968 + 106835968 + 109023232 +
-                             75829248)
-        self.assertPublished(publish_mock, 'foo.rss', 0)
-        self.assertPublished(publish_mock, 'bar.rss', 2)
-        self.assertPublished(publish_mock, 'barexe.rss', 10)
-        self.assertPublished(publish_mock, 'diamond-selfmon.rss', 1234)
-        self.assertPublished(publish_mock, 'diamond-selfmon.vms', 90210)
-        self.assertPublished(publish_mock, 'bar.cpu_percent', 7 * 2)
-        self.assertPublished(publish_mock, 'barexe.cpu_percent', 7)
+        self.assertPublished(publish_mock, 'foo.uptime', 1234567890)
+        self.assertPublished(publish_mock, 'foo.num_fds', 10)
+        self.assertPublished(publish_mock, 'postgres.ext_memory_info.rss',
+                             1000000 + 100000 + 10000 + 1000 + 100)
+        self.assertPublished(publish_mock, 'foo.ext_memory_info.rss', 1)
+        self.assertPublished(publish_mock, 'bar.ext_memory_info.rss', 3)
+        self.assertPublished(publish_mock, 'barexe.ext_memory_info.rss', 3)
+        self.assertPublished(publish_mock,
+                             'diamond-selfmon.ext_memory_info.rss', 1234)
 
 ################################################################################
 if __name__ == "__main__":

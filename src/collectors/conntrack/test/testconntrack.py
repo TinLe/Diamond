@@ -19,6 +19,7 @@ class TestConnTrackCollector(CollectorTestCase):
         config = get_collector_config('ConnTrackCollector', {
             'interval': 10,
             'bin': 'true',
+            'dir': self.getFixtureDirPath(),
         })
 
         self.collector = ConnTrackCollector(config, None)
@@ -26,20 +27,13 @@ class TestConnTrackCollector(CollectorTestCase):
     def test_import(self):
         self.assertTrue(ConnTrackCollector)
 
-    @patch('os.access', Mock(return_value=True))
     @patch.object(Collector, 'publish')
     def test_should_work_with_synthetic_data(self, publish_mock):
-        patch_communicate = patch('subprocess.Popen.communicate',
-                                  Mock(return_value=(
-                                    'net.netfilter.nf_conntrack_count = 33',
-                                    '')))
-
-        patch_communicate.start()
         self.collector.collect()
-        patch_communicate.stop()
 
         metrics = {
-            'nf_conntrack_count': 33.0
+            'ip_conntrack_count': 33.0,
+            'ip_conntrack_max': 36.0,
         }
 
         self.setDocExample(collector=self.collector.__class__.__name__,
@@ -50,12 +44,13 @@ class TestConnTrackCollector(CollectorTestCase):
     @patch('os.access', Mock(return_value=True))
     @patch.object(Collector, 'publish')
     def test_should_fail_gracefully(self, publish_mock):
-        patch_communicate = patch('subprocess.Popen.communicate',
-                                  Mock(
-                                    return_value=(
-                                        'sysctl: cannot stat /proc/sys/net/net'
-                                        + 'filter/nf_conntrack_count: '
-                                        + 'No such file or directory', '')))
+        patch_communicate = patch(
+            'subprocess.Popen.communicate',
+            Mock(
+                return_value=(
+                    'sysctl: cannot stat /proc/sys/net/net'
+                    + 'filter/nf_conntrack_count: '
+                    + 'No such file or directory', '')))
 
         patch_communicate.start()
         self.collector.collect()

@@ -3,7 +3,6 @@
 
 try:
     import json
-    json  # workaround for pyflakes issue #13
 except ImportError:
     import simplejson as json
 
@@ -198,13 +197,19 @@ class TestCephCollectorPublish(CollectorTestCase):
     @patch.object(Collector, 'publish')
     def test_simple(self, publish_mock):
         self.collector._publish_stats('prefix', {'a': 1})
-        publish_mock.assert_called_with('prefix.a', 1)
+        publish_mock.assert_called_with('prefix.a', 1,
+                                        metric_type='GAUGE', instance=None,
+                                        precision=0)
 
     @patch.object(Collector, 'publish')
     def test_multiple(self, publish_mock):
         self.collector._publish_stats('prefix', {'a': 1, 'b': 2})
-        publish_mock.assert_has_calls([call('prefix.a', 1),
-                                       call('prefix.b', 2),
+        publish_mock.assert_has_calls([call('prefix.a', 1,
+                                            metric_type='GAUGE', instance=None,
+                                            precision=0),
+                                       call('prefix.b', 2,
+                                            metric_type='GAUGE', instance=None,
+                                            precision=0),
                                        ])
 
 if __name__ == "__main__":

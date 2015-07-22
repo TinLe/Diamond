@@ -20,10 +20,13 @@ import sys
 def run_only_if_pyutmp_is_available(func):
     try:
         import pyutmp
-        pyutmp  # workaround for pyflakes issue #13
     except ImportError:
         pyutmp = None
-    pred = lambda: pyutmp is not None
+    try:
+        import utmp
+    except ImportError:
+        utmp = None
+    pred = lambda: pyutmp is not None or utmp is not None
     return run_only(func, pred)
 
 

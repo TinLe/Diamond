@@ -71,13 +71,12 @@ class FilestatCollector(diamond.collector.Collector):
         config = super(FilestatCollector, self).get_default_config()
         config.update({
             'path':     'files',
-            'method':   'Threaded',
             'user_include': None,
             'user_exclude': None,
             'group_include': None,
             'group_exclude': None,
-            'uid_min': None,
-            'uid_max': None,
+            'uid_min': 0,
+            'uid_max': 65536,
             'type_include': None,
             'type_exclude': None,
             'collect_user_data': False
@@ -90,13 +89,13 @@ class FilestatCollector(diamond.collector.Collector):
         based on the variables user_include and user_exclude
         """
     # convert user/group  lists to arrays if strings
-        if isinstance(self.config['user_include'], str):
+        if isinstance(self.config['user_include'], basestring):
             self.config['user_include'] = self.config['user_include'].split()
-        if isinstance(self.config['user_exclude'], str):
+        if isinstance(self.config['user_exclude'], basestring):
             self.config['user_exclude'] = self.config['user_exclude'].split()
-        if isinstance(self.config['group_include'], str):
+        if isinstance(self.config['group_include'], basestring):
             self.config['group_include'] = self.config['group_include'].split()
-        if isinstance(self.config['group_exclude'], str):
+        if isinstance(self.config['group_exclude'], basestring):
             self.config['group_exclude'] = self.config['group_exclude'].split()
 
         rawusers = os.popen("lsof | awk '{ print $3 }' | sort | uniq -d"
@@ -105,7 +104,7 @@ class FilestatCollector(diamond.collector.Collector):
 
         # remove any not on the user include list
         if (self.config['user_include'] is None
-            or len(self.config['user_include']) == 0):
+                or len(self.config['user_include']) == 0):
             userlist = rawusers
         else:
             # only work with specified include list, which is added at the end
@@ -114,7 +113,7 @@ class FilestatCollector(diamond.collector.Collector):
         # add any user in the group include list
         addedByGroup = []
         if (self.config['group_include'] is not None
-            and len(self.config['group_include']) > 0):
+                and len(self.config['group_include']) > 0):
             for u in rawusers:
                 self.log.info(u)
                 # get list of groups of user
@@ -127,7 +126,7 @@ class FilestatCollector(diamond.collector.Collector):
 
         # remove any user in the exclude group list
         if (self.config['group_exclude'] is not None
-            and len(self.config['group_exclude']) > 0):
+                and len(self.config['group_exclude']) > 0):
             # create tmp list to iterate over while editing userlist
             tmplist = userlist[:]
             for u in tmplist:
@@ -145,28 +144,28 @@ class FilestatCollector(diamond.collector.Collector):
         tmplist = userlist[:]
         for u in tmplist:
             if (self.config['user_include'] is None
-                or u not in self.config['user_include']):
+                    or u not in self.config['user_include']):
                 if u not in addedByGroup:
                     uid = int(os.popen("id -u %s" % (u)).read())
                     if (uid < self.config['uid_min']
-                        and self.config['uid_min'] != None
-                        and u in userlist):
+                            and self.config['uid_min'] is not None
+                            and u in userlist):
                         userlist.remove(u)
                     if (uid > self.config['uid_max']
-                        and self.config['uid_max'] != None
-                        and u in userlist):
+                            and self.config['uid_max'] is not None
+                            and u in userlist):
                         userlist.remove(u)
 
         # add users that are in the users include list
         if self.config['user_include'] is not None and len(
-            self.config['user_include']) > 0:
+                self.config['user_include']) > 0:
             for u in self.config['user_include']:
                 if u in rawusers and u not in userlist:
                     userlist.append(u)
 
         # remove any that is on the user exclude list
         if self.config['user_exclude'] is not None and len(
-            self.config['user_exclude']) > 0:
+                self.config['user_exclude']) > 0:
             for u in self.config['user_exclude']:
                 if u in userlist:
                     userlist.remove(u)
@@ -180,14 +179,14 @@ class FilestatCollector(diamond.collector.Collector):
         typelist = []
 
         # convert type list into arrays if strings
-        if isinstance(self.config['type_include'], str):
+        if isinstance(self.config['type_include'], basestring):
             self.config['type_include'] = self.config['type_include'].split()
-        if isinstance(self.config['type_exclude'], str):
+        if isinstance(self.config['type_exclude'], basestring):
             self.config['type_exclude'] = self.config['type_exclude'].split()
 
         # remove any not in include list
         if self.config['type_include'] is None or len(
-            self.config['type_include']) == 0:
+                self.config['type_include']) == 0:
             typelist = os.popen("lsof | awk '{ print $5 }' | sort | uniq -d"
                                 ).read().split()
         else:
@@ -195,7 +194,7 @@ class FilestatCollector(diamond.collector.Collector):
 
         # remove any in the exclude list
         if self.config['type_exclude'] is not None and len(
-            self.config['type_include']) > 0:
+                self.config['type_include']) > 0:
             for t in self.config['type_exclude']:
                 if t in typelist:
                     typelist.remove(t)
@@ -235,7 +234,7 @@ class FilestatCollector(diamond.collector.Collector):
             data = self.process_lsof(self.get_userlist(), self.get_typelist())
             for ukey in data.iterkeys():
                 for tkey in data[ukey].iterkeys():
-                    self.log.info('files.user.%s.%s %s' % (
+                    self.log.debug('files.user.%s.%s %s' % (
                         ukey, tkey, int(data[ukey][tkey])))
                     self.publish('user.%s.%s' % (ukey, tkey),
                                  int(data[ukey][tkey]))

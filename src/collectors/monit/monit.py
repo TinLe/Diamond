@@ -22,6 +22,7 @@ class MonitCollector(diamond.collector.Collector):
     def get_default_config_help(self):
         config_help = super(MonitCollector, self).get_default_config_help()
         config_help.update({
+            'send_totals': 'Send cpu and memory totals',
         })
         return config_help
 
@@ -37,6 +38,7 @@ class MonitCollector(diamond.collector.Collector):
             'passwd':       'monit',
             'path':         'monit',
             'byte_unit':    ['byte'],
+            'send_totals':  False,
         })
         return config
 
@@ -67,18 +69,49 @@ class MonitCollector(diamond.collector.Collector):
         for service in dom.getElementsByTagName('service'):
             if int(service.getAttribute('type')) == 3:
                 name = service.getElementsByTagName('name')[0].firstChild.data
-                cpu = service.getElementsByTagName(
-                    'cpu')[0].getElementsByTagName('percent')[0].firstChild.data
-                mem = int(service.getElementsByTagName(
-                    'memory')[0].getElementsByTagName(
-                        'kilobyte')[0].firstChild.data)
+                if (service.getElementsByTagName(
+                    'status')[0].firstChild.data == '0'
+                    and service.getElementsByTagName(
+                        'monitor')[0].firstChild.data == '1'):
+                    try:
+                        uptime = service.getElementsByTagName(
+                            'uptime')[0].firstChild.data
+                        metrics["%s.uptime" % name] = uptime
 
-                metrics["%s.cpu.percent" % name] = cpu
-                for unit in self.config['byte_unit']:
-                    metrics["%s.memory.%s_usage" % (name, unit)] = (
-                        diamond.convertor.binary.convert(value=mem,
-                                                         oldUnit='kilobyte',
-                                                         newUnit=unit))
+                        cpu = service.getElementsByTagName(
+                            'cpu')[0].getElementsByTagName(
+                            'percent')[0].firstChild.data
+                        metrics["%s.cpu.percent" % name] = cpu
+                        if self.config['send_totals']:
+                            cpu_total = service.getElementsByTagName(
+                                'cpu')[0].getElementsByTagName(
+                                'percenttotal')[0].firstChild.data
+                            metrics["%s.cpu.percent_total" % name] = cpu_total
+
+                        mem = int(service.getElementsByTagName(
+                            'memory')[0].getElementsByTagName(
+                            'kilobyte')[0].firstChild.data)
+                        for unit in self.config['byte_unit']:
+                            metrics["%s.memory.%s_usage" % (name, unit)] = (
+                                diamond.convertor.binary.convert(
+                                    value=mem,
+                                    oldUnit='kilobyte',
+                                    newUnit=unit))
+                        metrics["%s.uptime" % name] = uptime
+                        if self.config['send_totals']:
+                            mem_total = int(service.getElementsByTagName(
+                                'memory')[0].getElementsByTagName(
+                                'kilobytetotal')[0].firstChild.data)
+                            for unit in self.config['byte_unit']:
+                                metrics["%s.memory_total.%s_usage" % (
+                                    name, unit)] = (
+                                    diamond.convertor.binary.convert(
+                                        value=mem,
+                                        oldUnit='kilobyte',
+                                        newUnit=unit))
+
+                    except:
+                        pass
 
         for key in metrics:
             self.publish(key, metrics[key])

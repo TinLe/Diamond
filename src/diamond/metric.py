@@ -2,6 +2,7 @@
 
 import time
 import re
+import logging
 from error import DiamondException
 
 
@@ -9,8 +10,8 @@ class Metric(object):
 
     _METRIC_TYPES = ['COUNTER', 'GAUGE']
 
-    def __init__(self, path, value, timestamp=None, precision=0, host=None,
-                 metric_type='COUNTER'):
+    def __init__(self, path, value, raw_value=None, timestamp=None, precision=0,
+                 host=None, metric_type='COUNTER', ttl=None):
         """
         Create new instance of the Metric class
 
@@ -23,10 +24,11 @@ class Metric(object):
         """
 
         # Validate the path, value and metric_type submitted
-        if (path is None
-            or value is None
-            or metric_type not in self._METRIC_TYPES):
-            raise DiamondException("Invalid parameter.")
+        if (None in [path, value] or metric_type not in self._METRIC_TYPES):
+            raise DiamondException(("Invalid parameter when creating new "
+                                    "Metric with path: %r value: %r "
+                                    "metric_type: %r")
+                                   % (path, value, metric_type))
 
         # If no timestamp was passed in, set it to the current time
         if timestamp is None:
@@ -37,30 +39,40 @@ class Metric(object):
                 try:
                     timestamp = int(timestamp)
                 except ValueError, e:
-                    raise DiamondException("Invalid parameter: %s" % e)
+                    raise DiamondException(("Invalid timestamp when "
+                                            "creating new Metric %r: %s")
+                                           % (path, e))
 
         # The value needs to be a float or an int.  If it is, great.  If not,
         # try to cast it to one of those.
-        if not isinstance(value, int) and not isinstance(value, float):
+        if not isinstance(value, (int, float)):
             try:
                 if precision == 0:
                     value = round(float(value))
                 else:
                     value = float(value)
             except ValueError, e:
-                raise DiamondException("Invalid parameter: %s" % e)
+                raise DiamondException(("Invalid value when creating new "
+                                        "Metric %r: %s") % (path, e))
 
         self.path = path
         self.value = value
+        self.raw_value = raw_value
         self.timestamp = timestamp
         self.precision = precision
         self.host = host
         self.metric_type = metric_type
+        self.ttl = ttl
 
     def __repr__(self):
         """
         Return the Metric as a string
         """
+        if not isinstance(self.precision, (int, long)):
+            log = logging.getLogger('diamond')
+            log.warn('Metric %s does not have a valid precision', self.path)
+            self.precision = 0
+
         # Set the format string
         fstring = "%%s %%0.%if %%i\n" % self.precision
 
@@ -128,12 +140,8 @@ class Metric(object):
             path = self.path.split('.')[3:]
             return '.'.join(path)
 
-        prefix = self.getPathPrefix()
-        prefix += '.'
-        prefix += self.host
-        prefix += '.'
-        prefix += self.getCollectorPath()
-        prefix += '.'
+        prefix = '.'.join([self.getPathPrefix(), self.host,
+                           self.getCollectorPath()])
 
-        offset = len(prefix)
+        offset = len(prefix) + 1
         return self.path[offset:]

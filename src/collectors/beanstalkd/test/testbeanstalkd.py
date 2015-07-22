@@ -18,7 +18,6 @@ from beanstalkd import BeanstalkdCollector
 def run_only_if_beanstalkc_is_available(func):
     try:
         import beanstalkc
-        beanstalkc  # workaround for pyflakes issue #13
     except ImportError:
         beanstalkc = None
     pred = lambda: beanstalkc is not None
@@ -104,13 +103,13 @@ class TestBeanstalkdCollector(CollectorTestCase):
                     'current-jobs-reserved': 0,
                     'current-using': 10,
                     'current-jobs-urgent': 0,
-                }
-             ]
+                    }
+                ]
         }
 
         patch_get_stats = patch.object(BeanstalkdCollector,
-                                        '_get_stats',
-                                        Mock(return_value=stats))
+                                       '_get_stats',
+                                       Mock(return_value=stats))
 
         patch_get_stats.start()
         self.collector.collect()
